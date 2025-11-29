@@ -1,4 +1,4 @@
-// Test this file locally with: node --env-file=.env index.js
+// Test this file locally with: node --env-file=.env lambda/index.js
 
 const chromium = require('@sparticuz/chromium');
 const puppeteer = require('puppeteer-core');
@@ -6,27 +6,34 @@ const ResponseObject = require('./responseObj');
 const { getSsmParameter } = require('./utils');
 
 exports.handler = async (event) => {
+  console.log('Event:', JSON.stringify(event, null, 2));
+
   let browser = null;
   let skillResponse;
   const isLocal = !process.env.AWS_EXECUTION_ENV;
 
-  // 1. Parse Input Parameters
-  let name, targetEmail, testMode;
-  
+  // Helper to parse body
+  let body = {};
   if (event.body) {
     try {
-      const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
-      if (body.name) name = body.name;
-      if (body.targetEmail) targetEmail = body.targetEmail;
-      if (body.testMode !== undefined) testMode = body.testMode;
-    } catch (e) {
-      console.log('Error parsing body:', e);
+      body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    } catch (err) {
+      console.error('Failed to parse body JSON:', err);
     }
-  } else if (event.queryStringParameters) {
-    if (event.queryStringParameters.name) name = event.queryStringParameters.name;
-    if (event.queryStringParameters.targetEmail) targetEmail = event.queryStringParameters.targetEmail;
-    if (event.queryStringParameters.testMode) testMode = event.queryStringParameters.testMode === 'true';
   }
+  const query = event.queryStringParameters || {};
+
+  console.log('Parsed Body:', body);
+  console.log('Query Params:', query);
+
+  // Test mode is true by default
+  let testMode = true;
+  if (query.test_mode === 'false' || body.testMode === false) {
+    testMode = false;
+  }
+
+  const name = body.name || query.name;
+  const targetEmail = body.targetEmail || query.targetEmail;
 
   console.log(`Request received for Name: ${name}, Email: ${targetEmail}, TestMode: ${testMode}`);
 
@@ -36,6 +43,13 @@ exports.handler = async (event) => {
     console.log('Test mode enabled, returning success without automation.');
     console.log('Skill response:', skillResponse.toString());
     return skillResponse.getResult();
+  }
+
+  // Validate required parameters
+  if (!name || !targetEmail) {
+      skillResponse = new ResponseObject(false, 400, `Missing required parameters: Name (${name}), Email (${targetEmail})`);
+      console.log('Skill response:', skillResponse.toString());
+      return skillResponse.getResult();
   }
 
   try {
