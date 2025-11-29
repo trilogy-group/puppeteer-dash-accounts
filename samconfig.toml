@@ -2,9 +2,9 @@ version = 0.1
 [default]
 [default.deploy]
 [default.deploy.parameters]
-stack_name = "PuppeteerLambda<Template>"
+stack_name = "PuppeteerLambdaPuppeteerDashAccounts"
 s3_bucket = "cf-templates-deniz"
-s3_prefix = "PuppeteerLambda<Template>"
+s3_prefix = "PuppeteerLambdaPuppeteerDashAccounts"
 region = "us-east-1"
 capabilities = "CAPABILITY_IAM"
 resolve_s3 = false

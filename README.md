@@ -6,76 +6,16 @@ It includes a Lambda layer with **Chromium 141.0.0** and **puppeteer-core 24.23.
 <br>
 <br>
 
-## 🛠️ Initial Setup
-
-<br>
-
-**2. Open a terminal in your code editor and clone this repository**
-
-
-**3. Project Setup**
-- Rename the `puppeteer-template` folder to `your-repo-name` in your explorer
-- Delete the .git file
-- Open the folder in your code editor
-- Use CTRL+H to replace all occurrences of `<your-repo-name>` in this `README.md` file with your `github-project-name`
-- Use CTRL+H to replace all occurrences of `<template>` in `template.yaml` with `YourAutomationName`
-- Use CTRL+H to replace all occurrences of `<template>` in `samconfig.toml` with `YourAutomationName`
-
-<br>
-
-**4. Push your repository to GitHub**
-- Create a new repository in the trilogy-group [GitHub](https://github.com/organizations/trilogy-group/repositories/new).
-- Run these commands one by one in your terminal:
-```bash
-cd <your-repo-name>
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/trilogy-group/<your-repo-name>.git
-git push -u origin main
-```
-
-<br>
-<br>
-
 ## 💻 Local Development
 
-**1. Set up local credentials**
-- Create a `.env` file inside the `lambda` folder to store credentials locally
-- Add key-value pairs matching your SSM parameter paths (e.g. `/your-product/your-app/password=example123`)
-
-<br>
-
-**2. Install Dependencies (this must also be done whenever new packages are added)**
-- Navigate to the lambda function folder and install the required packages:
-```bash
-cd <your-repo-name>/lambda
-npm install
-```
-
-<br>
-
-**3. Write your code using Cursor or Windsurf**
-- Use the inspect window in Chrome to provide the relevant HTML elements as context
-- Ask it to include console logging to help AI understand any failure points
-- Ask it to update the README.md as it goes
-
-<br>
-
-**4. Test your function locally and watch the progress in a Chromium window**
+**Test your function locally and watch the progress in a Chromium window**
 ```bash
 node --env-file=.env index.js
 ```
-- Watch the progress in the Chromium window that pops up
-- Observe the logs in your terminal console
-- Challenge: Log in successfully to the website
-
-<br>
 
 **5. Sync with Git regularly**
 ```bash
-git add .
+git add ..
 git commit -m "Update automation logic"
 git push
 ```

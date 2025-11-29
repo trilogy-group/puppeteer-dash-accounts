@@ -10,74 +10,125 @@ exports.handler = async (event) => {
   let skillResponse;
   const isLocal = !process.env.AWS_EXECUTION_ENV;
 
-  // 1. Retrieve a password from SSM (or .env for local dev)
-  const password = await getSsmParameter('/your-product/your-app/password');
-  console.log('Retrieved password (length):', password ? password.length : 0);
-
-  // 2. Parse Input Parameters (for example, these can be variables extracted from a Kayako ticket)
-  // You can set parameters locally at the very end of this file
-  // Define a parameter
-  let username;
-  // Extract the parameter (prod only)
+  // 1. Parse Input Parameters
+  let name, targetEmail, testMode;
+  
   if (event.body) {
     try {
       const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
-      if (body.username) username = body.username;
+      if (body.name) name = body.name;
+      if (body.targetEmail) targetEmail = body.targetEmail;
+      if (body.testMode !== undefined) testMode = body.testMode;
     } catch (e) {
       console.log('Error parsing body:', e);
     }
-  } else if (event.queryStringParameters && event.queryStringParameters.username) {
-    username = event.queryStringParameters.username;
+  } else if (event.queryStringParameters) {
+    if (event.queryStringParameters.name) name = event.queryStringParameters.name;
+    if (event.queryStringParameters.targetEmail) targetEmail = event.queryStringParameters.targetEmail;
+    if (event.queryStringParameters.testMode) testMode = event.queryStringParameters.testMode === 'true';
   }
-  console.log('Using username:', username);
+
+  console.log(`Request received for Name: ${name}, Email: ${targetEmail}, TestMode: ${testMode}`);
+
+  // 2. Handle Test Mode
+  if (testMode) {
+    skillResponse = new ResponseObject(true, 200, `Testing create admin account for ${name} (${targetEmail})`);
+    console.log('Test mode enabled, returning success without automation.');
+    console.log('Skill response:', skillResponse.toString());
+    return skillResponse.getResult();
+  }
 
   try {
-    // 3. Launch Browser
+    // 3. Retrieve Credentials
+    const email = await getSsmParameter('/edu/dash/user_email');
+    const password = await getSsmParameter('/edu/dash/user_password');
+    
+    if (!email || !password) {
+        throw new Error('Missing credentials in SSM');
+    }
+
+    // 4. Launch Browser
     let launchConfig;
     if (isLocal) {
       console.log('Running locally: Launching local Chrome...');
-      launchConfig = {channel: 'chrome', headless: false};
+      launchConfig = {
+        channel: 'chrome', 
+        headless: false,
+        defaultViewport: { width: 1600, height: 1000 }
+      };
     } else {
       console.log('Running in Lambda: Using @sparticuz/chromium...');
-      launchConfig = {args: chromium.args, defaultViewport: chromium.defaultViewport, executablePath: await chromium.executablePath(), headless: chromium.headless};
+      chromium.setHeadlessMode = true;
+      chromium.setGraphicsMode = false;
+      
+      launchConfig = {
+        args: chromium.args, 
+        defaultViewport: chromium.defaultViewport ?? { width: 1600, height: 1000 }, 
+        executablePath: await chromium.executablePath(), 
+        headless: chromium.headless
+      };
     }
 
     browser = await puppeteer.launch(launchConfig);
     const page = await browser.newPage();
+    await page.setViewport({ width: 1600, height: 1000 });
 
-    // 4. Navigate to URL
-    console.log('Navigating to Login Page...');
-    await page.goto('https://the-internet.herokuapp.com/login');
+    // 5. Automation Logic
+    const loginUrl = 'https://dash.alpha.school/';
     
-    // Wait to let the user see the page load (1 second)
-    await new Promise(r => setTimeout(r, 1000));
+    console.log('[dash_admin] Navigating to login page...');
+    await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 180000 });
 
-    // 5. Enter Username
-    console.log('Entering username...');
-    const usernameSelector = '#username';
-    await page.waitForSelector(usernameSelector);
-    await page.type(usernameSelector, username);
+    console.log('[dash_admin] Filling login form...');
+    await page.waitForSelector("input[name='email']", { timeout: 90000 });
+    await page.type("input[name='email']", email, { delay: 20 });
+    await page.type("input[name='password']", password, { delay: 20 });
 
-    // 6. Enter Password
-    console.log('Entering password...');
-    const passwordSelector = '#password';
-    await page.type(passwordSelector, password); // For success, use 'SuperSecretPassword!' in your .env
+    console.log('[dash_admin] Submitting login form...');
+    await page.click("button[type='submit']");
 
-    // Wait to let the user see the typed text (1 second)
-    await new Promise(r => setTimeout(r, 1000));
+    console.log('[dash_admin] Waiting for dashboard redirect...');
+    await page.waitForFunction(() => window.location.href.includes('dashboard'), { timeout: 60000 });
+    
+    // Wait a bit for session to settle
+    await new Promise(r => setTimeout(r, 5000));
 
-    // 7. Click Login
-    console.log('Clicking Login...');
-    const loginButtonSelector = 'button[type="submit"]';
-    await page.click(loginButtonSelector);
+    console.log('[dash_admin] Navigating to new user page...');
+    await page.goto('https://dash.alpha.school/user/new/', {
+      waitUntil: 'networkidle0',
+      timeout: 180000,
+    });
 
-    // 8. Wait for Result
-    // Wait for the flash message to appear (success or failure)
-    await page.waitForSelector('#flash');
-    console.log('Successfully attempted login');
+    if (!page.url().includes('/user/new')) {
+        console.log('[dash_admin] Direct navigation might have failed, checking URL...');
+        await page.waitForFunction(() => window.location.href.includes('/user/new'), { timeout: 30000 })
+            .catch(() => console.log('[dash_admin] Failed to reach /user/new, current URL:', page.url()));
+    }
 
-    // 9. Create the response
-    skillResponse = new ResponseObject(true, 200, 'Successfully performed login interaction');
+    console.log(`[dash_admin] Filling form with Name: ${name}, Email: ${targetEmail}`);
+
+    await page.waitForSelector("input[name='name']", { timeout: 30000 });
+    await page.type("input[name='name']", name, { delay: 20 });
+    await page.type("input[name='email']", targetEmail, { delay: 20 });
+    await page.select("select[name='role']", "Admin");
+
+    await page.click("button[type='submit']");
+    
+    console.log('[dash_admin] Form submitted. Waiting for completion...');
+    try {
+        await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 });
+    } catch (e) {
+        console.log('[dash_admin] Navigation timeout or no navigation occurred after submit.');
+    }
+
+    const finalUrl = page.url();
+    console.log('[dash_admin] Final URL:', finalUrl);
+
+    if (!finalUrl.includes('/user/new')) {
+        skillResponse = new ResponseObject(true, 200, `SUCCESS: Account creation initiated for ${targetEmail}.`);
+    } else {
+        skillResponse = new ResponseObject(false, 500, `WARNING: Still on the form page. Check validation.`);
+    }
 
   } catch (error) {
     console.error('Automation failed:', error);
@@ -102,7 +153,9 @@ if (require.main === module) {
     const event = { 
       path: '/test', 
       body: JSON.stringify({ 
-        username: 'tomsmith' // Set input parameters locally here
+        name: 'Harry Test Admin',
+        targetEmail: 'test.harry@alpha.school',
+        testMode: false // Set to true to test without launching browser
       })
     };
     await exports.handler(event);
