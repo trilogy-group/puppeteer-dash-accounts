@@ -26,11 +26,8 @@ exports.handler = async (event) => {
   console.log('Parsed Body:', body);
   console.log('Query Params:', query);
 
-  // Test mode is true by default
-  let testMode = true;
-  if (query.test_mode === 'false' || body.testMode === false) {
-    testMode = false;
-  }
+  // Test mode follows the same pattern as other agentic skills: only when ?test_mode=true
+  const testMode = query.test_mode === 'true';
 
   const name = body.name || query.name;
   const targetEmail = body.targetEmail || query.targetEmail;
