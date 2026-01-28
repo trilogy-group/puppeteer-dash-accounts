@@ -26,8 +26,9 @@ exports.handler = async (event) => {
   console.log('Parsed Body:', body);
   console.log('Query Params:', query);
 
-  // Test mode follows the same pattern as other agentic skills: only when ?test_mode=true
-  const testMode = query.test_mode === 'true';
+  // Test mode follows the same pattern as other agentic skills: ?test_mode=true with safe default false
+  const rawTestMode = body.test_mode ?? body.testMode ?? query.test_mode ?? 'false';
+  const testMode = String(rawTestMode).toLowerCase() === 'true';
 
   const name = body.name || query.name;
   const targetEmail = body.targetEmail || query.targetEmail;
@@ -36,7 +37,9 @@ exports.handler = async (event) => {
 
   // 2. Handle Test Mode
   if (testMode) {
-    skillResponse = new ResponseObject(true, 200, `Testing create admin account for ${name} (${targetEmail})`);
+    const testModeMessage = `Test mode: Invoked dash create admin account with parameters: ${JSON.stringify(body)}`;
+    skillResponse = new ResponseObject(true, 200, testModeMessage);
+
     console.log('Test mode enabled, returning success without automation.');
     console.log('Skill response:', skillResponse.toString());
     return skillResponse.getResult();
