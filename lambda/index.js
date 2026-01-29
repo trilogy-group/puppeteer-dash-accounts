@@ -27,8 +27,12 @@ exports.handler = async (event) => {
   console.log('Query Params:', query);
 
   // Test mode follows the same pattern as other agentic skills: ?test_mode=true with safe default false
-  const rawTestMode = body.test_mode ?? body.testMode ?? query.test_mode ?? 'false';
-  const testMode = String(rawTestMode).toLowerCase() === 'true';
+  const hasTestModeParam =
+    Object.prototype.hasOwnProperty.call(body, 'test_mode') ||
+    Object.prototype.hasOwnProperty.call(body, 'testMode') ||
+    Object.prototype.hasOwnProperty.call(query, 'test_mode');
+  const rawTestMode = body.test_mode ?? body.testMode ?? query.test_mode;
+  const testMode = hasTestModeParam && String(rawTestMode).toLowerCase() === 'true';
 
   const name = body.name || query.name;
   const targetEmail = body.targetEmail || query.targetEmail;
