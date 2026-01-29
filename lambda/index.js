@@ -131,8 +131,30 @@ exports.handler = async (event) => {
     await page.select("select[name='role']", "Admin");
 
     await page.click("button[type='submit']");
-    
+
     console.log('[dash_admin] Form submitted. Waiting for completion...');
+    let createUserResponse;
+    try {
+        createUserResponse = await page.waitForResponse(
+          (response) => response.url().includes('/create-update-user') && response.request().method() === 'POST',
+          { timeout: 15000 }
+        );
+    } catch (e) {
+        console.log('[dash_admin] create-update-user response not captured within timeout.');
+    }
+
+    if (createUserResponse) {
+      const status = createUserResponse.status();
+      let responseText = '';
+      try {
+        responseText = await createUserResponse.text();
+      } catch (e) {
+        responseText = '[unreadable response body]';
+      }
+      console.log('[dash_admin] create-update-user status:', status);
+      console.log('[dash_admin] create-update-user response:', responseText);
+    }
+
     try {
         await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 });
     } catch (e) {
@@ -145,7 +167,20 @@ exports.handler = async (event) => {
     if (!finalUrl.includes('/user/new')) {
         skillResponse = new ResponseObject(true, 200, `SUCCESS: Account creation initiated for ${targetEmail}.`);
     } else {
-        skillResponse = new ResponseObject(false, 500, `WARNING: Still on the form page. Check validation.`);
+        const pageContent = await page.content();
+        const normalizedContent = pageContent.toLowerCase();
+        const alreadyExistsMarkers = [
+          'already exists',
+          'already been taken',
+          'email has already been taken',
+          'user already exists',
+        ];
+
+        if (alreadyExistsMarkers.some(marker => normalizedContent.includes(marker))) {
+          skillResponse = new ResponseObject(true, 200, `Account already exists for ${targetEmail}.`);
+        } else {
+          skillResponse = new ResponseObject(false, 500, `WARNING: Still on the form page. Check validation.`);
+        }
     }
 
   } catch (error) {
